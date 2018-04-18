@@ -22,7 +22,7 @@ public class JDBCSink {
         try {
             return DriverManager.getConnection(connectionUrl);
         } catch (SQLException e) {
-            throw new IllegalStateException("Cannot acquire a connection with URL '" + connectionUrl + "'");
+            throw new IllegalStateException("Cannot acquire a connection with URL '" + connectionUrl + "'", e);
         }
     }
 
