@@ -12,21 +12,34 @@ public class JDBCSink {
     private static final String INSERT_QUERY = "insert into stock_updates (ts, price, symbol) values (?, ?, ?)";
 
     public static Sink<StockPriceUpdate> newSink(String connectionUrl) {
-        return Sinks.<Connection, StockPriceUpdate>builder((unused) -> JDBCSink.openConnection(connectionUrl))
+        return Sinks.<PreparedStatement, StockPriceUpdate>builder((unused) -> JDBCSink.createStatement(connectionUrl))
                 .onReceiveFn(JDBCSink::insertUpdate)
-                .destroyFn(JDBCSink::closeConnection)
+                .destroyFn(JDBCSink::cleanup)
                 .build();
     }
 
-    private static Connection openConnection(String connectionUrl) {
+    private static PreparedStatement createStatement(String connectionUrl) {
+        Connection connection = null;
         try {
-            return DriverManager.getConnection(connectionUrl);
+            connection = DriverManager.getConnection(connectionUrl);
+            return connection.prepareStatement(INSERT_QUERY);
         } catch (SQLException e) {
+            closeSilently(connection);
             throw new IllegalStateException("Cannot acquire a connection with URL '" + connectionUrl + "'", e);
         }
     }
 
-    private static void closeConnection(Connection c) {
+    private static void closeSilently(Connection connection) {
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                //ignored
+            }
+        }
+    }
+
+    private static void cleanup(PreparedStatement c) {
         try {
             c.close();
         } catch (SQLException e) {
@@ -34,8 +47,8 @@ public class JDBCSink {
         }
     }
 
-    private static void insertUpdate(Connection c, StockPriceUpdate i) {
-        try (PreparedStatement ps = c.prepareStatement(INSERT_QUERY)) {
+    private static void insertUpdate(PreparedStatement ps, StockPriceUpdate i) {
+        try {
             ps.setLong(1, i.getTimestamp());
             ps.setLong(2, i.getPrice());
             ps.setString(3, i.getSymbol());
