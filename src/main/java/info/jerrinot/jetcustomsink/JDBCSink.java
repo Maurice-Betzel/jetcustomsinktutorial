@@ -15,6 +15,7 @@ public class JDBCSink {
         return Sinks.<PreparedStatement, StockPriceUpdate>builder((unused) -> JDBCSink.createStatement(connectionUrl))
                 .onReceiveFn(JDBCSink::insertUpdate)
                 .destroyFn(JDBCSink::cleanup)
+                .flushFn(JDBCSink::flush)
                 .build();
     }
 
@@ -47,15 +48,23 @@ public class JDBCSink {
         }
     }
 
+    private static void flush(PreparedStatement ps) {
+        try {
+            ps.executeBatch();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Error while storing a batch into database", e);
+        }
+    }
+
     private static void insertUpdate(PreparedStatement ps, StockPriceUpdate i) {
         try {
             ps.setLong(1, i.getTimestamp());
             ps.setLong(2, i.getPrice());
             ps.setString(3, i.getSymbol());
 
-            ps.executeUpdate();
+            ps.addBatch();
         } catch (SQLException e) {
-            throw new IllegalStateException("Error while inserting " + i + " into database");
+            throw new IllegalStateException("Error while inserting " + i + " into database", e);
         }
     }
 }
